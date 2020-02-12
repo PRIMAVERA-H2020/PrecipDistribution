@@ -1542,7 +1542,7 @@ class PrecipExtremes(object):
                     dict_all_hist_to_plot_fin = dict_all_hist_to_plot
 
 
-                ########### now plot, you may want to changes some things in here ##############
+                ########### now plot, you may want to change some things in here ##############
 
                 for r in dict_all_hist_to_plot_fin.keys():
                     if 'obs' in r:

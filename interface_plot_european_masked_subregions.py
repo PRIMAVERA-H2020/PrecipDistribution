@@ -52,9 +52,10 @@ hist_type = args.g
 wet_or_dry_spells = args.w
 thrs = args.t
 
-### ME2: this defines ensembles of models: if a model or dataset is not in an ensemble,
+### this defines ensembles of models: if a model or dataset is not in an ensemble,
 # the lower/higher bounds of the bootstrapped interval will come from inter-annual variability in the pdf.
 # e.g. for the observations.
+# Note that all the members of the list need also to be defined in config further down
 ensemble_dict = {'PRIMAVERA': ['MPI-ESM1-2-XR_r1i1p1f1_EUROCORDEX',
                                'HadGEM3-GC31-HM_r1i1p1f1_EUROCORDEX',
 		 	       'CNRM-CM6-1-HR_r1i1p1f2_EUROCORDEX',
@@ -168,7 +169,7 @@ ensemble_dict = {'PRIMAVERA': ['MPI-ESM1-2-XR_r1i1p1f1_EUROCORDEX',
 what_to_bootstrap = ['PRIMAVERA', 'CORDEX-44', 'obs_cordex50']
 #what_to_bootstrap = [ 'PRIMAVERA']
 
-
+## this provides the 
 bootstrap_config = {
                    'PRIMAVERA':
 			{'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
@@ -287,7 +288,8 @@ bootstrap_config = {
                        },
                        }, 
 		    }   
-#ME2 add this:
+
+
 if bootstrap_config:
     for ens in what_to_bootstrap:
 	#if ens == 'obs_on_12km':
@@ -319,7 +321,7 @@ if bootstrap_config:
 xlim = {'d': (0.9, 500),
         'h': (0.02, 60)}  # (1./24./4., 100)
 savefig = True
-localdir = '/home/users/sberthou/PrecipExtremes/'  ### ME: must be the same as in process_data_europe, config['datadir']
+localdir = '/home/users/sberthou/PrecipExtremes/'  ### must be the same as in process_data_europe, config['datadir']
 dict_freq = {
     'h': 24.,
     'd': 1.,
@@ -438,42 +440,7 @@ else:
     hists = ['hist2d_{}_{}_{:d}.json'.format(reg_masked, wet_or_dry_spells, int(thrs)) for reg_masked in
              maskedreglist.keys()]
 
-if other == 'ukcpm_runs':
-    config = {'jsondir': 'srex_pdf_json/',
-              'histfile': {country: hists,  # country
-                           '2p2erai_on_nimrod': hists,
-                           # '2p2erai_on_ukcpobs':hists,
-                           #        '2p2':hists,
-                           'UKV_4km': hists,
-                           'UKV_2.2km_14': hists,
-                           # 'UKV_2p2km_24':hists,
-                           'UKV_2p2km_var': hists,
-                           'UKV_1p5km': hists,
-                           'UKV_4km_nest12': hists,
-                           }
-              }
-
-elif other == 'ammacatch':
-    if frequency == '3h':
-        config = {'jsondir': 'srex_pdf_json' + json_freq[frequency],
-                  'histfile': {
-                      'CP4': hists,
-                      'amma-catch': hists,
-                      'TRMM': hists,
-                      'CMORPH': hists,
-                  }
-                  }
-    else:
-        print 'amma-catch h'
-        config = {'jsondir': 'srex_pdf_json_hourly_jun17/',  # +json_freq[frequency],
-                  'histfile': {
-                      # 'cp4':hists,
-                      'amma-catch': hists,
-                  }
-                  }
-
-
-elif n512:
+if n512:
     config = {'jsondir': 'srex_pdf_json' + json_freq[frequency],
               'histfile': {  # country+'_on_n512':hists,
                   '2p2_on_n512': hists,
@@ -487,7 +454,7 @@ else:
 
     config = {
               'jsondir': '{}/srex_pdf_json{}'.format(localdir, json_freq[frequency]),
-              'histfile': {# MED: this is where you need to put CORDEX model names for plotting (name must be the same as the one in european_masked_subregion.py)
+              'histfile': {# this is where you need to put CORDEX model names for plotting (name must be the same as the one in european_masked_subregion.py)
                            #
 			   #EUR11 models
 			   #'CCLM-MPI': hists,
@@ -761,39 +728,52 @@ colordict = {#colours 'b','r','k','gold','k','y','c','m','g','aquamarine','darkg
 }
 
 # ### ME: not needed, but if you want to change the model names on the plots, enter them here.
-dictnames = {'2p2f_on_n512': '2.2\,km changes',
-             'n512_future': '25\,km changes',
-             'n512': '25km present',
-             '2p2_on_n512': '2.2\,km present', 'obs_cordex50': 'obs on CORDEX-44', 'obs_cordex50_scale': 'obs on CORDEX-44 x 1.2'}
+dictnames = {
+             'obs_cordex50': 'obs on CORDEX-44', 
+             'obs_cordex50_scale': 'obs on CORDEX-44 x 1.2'}
 
-####update11/10
+### calculates the p_value of the difference for the folllowing datasets (used for the pie chart):
 sig_diff_btw_list = None# [['CORDEX-44', 'PRIMAVERA', ],
                      #['obs_cordex50', 'CORDEX-44'],
                      #['obs_cordex50', 'PRIMAVERA'], 
                      #]#'CORDEX_50']
+
 percent_sig_per_season = {}
-####endupdate11/10
+
 for season in seasons:
     print 'season', season
     PreExt = __init__.PrecipExtremes(None, config, res_todo)
 
     if hist_type == '1d':
+
         PreExt.load_data(['masked', ], season)
         if savefig:
             # PreExt.save_subplot('masked', fractional, xlim[frequency], colordict, localdir+'/images/', season=season, bigregion=bigregion,
             #                     subregion_files=maskedreglist, nb_freq_per_day=dict_freq[frequency],
             #                     diff_btw_res=diff_btw_res,
             #                     dict_names=dictnames)
-            ### ME2: change save_subplot to this, percentiles are the interval used to plot the spread based on 1000 bootstrapped sample.
-            #####update11/10
+            ### change save_subplot to save_subplot_with_spread, 
+            # percentiles are the interval used to plot the spread based on 1000 bootstrapped sample.
             # set plot=False for more than 6 regions
-            sig_val = 0.1
-            percent_sig_per_season[season] = PreExt.save_subplot_with_spread('masked', fractional, xlim[frequency], colordict, localdir + '/images/', season=season,
+            sig_val = 0.1 
+            percent_sig_per_season[season] = PreExt.save_subplot_with_spread('masked', 
+                                fractional, # plot type
+                                xlim[frequency], #x limits for the graph
+                                colordict, #defines the colour of the line
+                                localdir + '/images/', 
+                                season=season,
                                 bigregion=bigregion,
-                                subregion_files=maskedreglist, nb_freq_per_day=dict_freq[frequency],
-                                dict_names=dictnames, dict_ensemble=ensemble_dict, bootstrap_config=bootstrap_config,
-                                            percentiles=[5, 95], sig_diff_btw_list=sig_diff_btw_list, #[25, 50, 75] for centiles
-                                            sig_val=sig_val, vals=[[1, 10], [10, 60], [60, 400], [1, 400]], plot=True, bootstrap_or_centiles='bootstrap')
+                                subregion_files=maskedreglist, 
+                                nb_freq_per_day=dict_freq[frequency],
+                                dict_names=dictnames, 
+                                dict_ensemble=ensemble_dict, 
+                                bootstrap_config=bootstrap_config,
+                                percentiles=[5, 95], # [25, 50, 75] for centiles
+                                sig_diff_btw_list=sig_diff_btw_list, # will be used as input for the pie chart
+                                sig_val=sig_val, # threshold of p_value to define "significantly different" 
+                                vals=[[1, 10], [10, 60], [60, 400], [1, 400]], # precipitation intervals on which to calculate significant difference
+                                plot=True, # set to False if you only want to calculate significance for the pie plot
+                                bootstrap_or_centiles='bootstrap') # can use either centiles over the ensemble or bootstrap spread to define the significance envelope.
 
     else:
         PreExt.load_data(['masked', ], season)
@@ -821,10 +801,23 @@ for season in seasons:
                                         freq_factor=dict_freq[frequency], replace_names=True)
 
 ####update11/10
+# this is where the pie plot is drawn:
 if 1==0:
  if percent_sig_per_season:
     print 'percent_sig_per_season', percent_sig_per_season
+    ### 1) plot the map with masked subregions
     subpl = __init__.plot_map(subregion_files, bigregion)
-    __init__.plot_pie_inset(subregion_files, subpl, 0.8, percent_sig_per_season, localdir + '/images/', comp_col='CORDEX-44vsPRIMAVERA', comp_let=['obs_cordex50vsCORDEX-44', 'obs_cordex50vsPRIMAVERA'], plot_type=fractional, distrib=distribution, percent_interval=0.9, sig_val=int(sig_val*100))
+    ### 2) plot the pie inset for each subregion
+    __init__.plot_pie_inset(subregion_files, 
+                            subpl, 
+                            0.8, # size of the inset pie - not important 
+                            percent_sig_per_season, # this was calculated by save_subplot_with_spread above
+                            localdir + '/images/', 
+                            comp_col='CORDEX-44vsPRIMAVERA', # which datasets to compare (needs to be one defined in sig_diff_btw_list)
+                            comp_let=['obs_cordex50vsCORDEX-44', 'obs_cordex50vsPRIMAVERA'], # score of each dataset against obs to be compared, defined in sig_diff_btw_list
+                            plot_type=fractional, # contrib
+                            distrib=distribution, # exponential100 
+                            percent_interval=0.9, # on how much of the interval are the datasets significantly different
+                            sig_val=int(sig_val*100)) # what is the value meaning "significantly different
 
 

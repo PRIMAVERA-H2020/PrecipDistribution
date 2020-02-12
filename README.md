@@ -1,1 +1,50 @@
 # PrecipDistribution
+
+Calculates precipitation histograms (frequency or contribution = frequency*mean bin rate)
+for given bins by pooling data from a region/season.
+
+This code is able to process a lot of datasets for different regions and seasons.
+An example figure and the method explanation is given in fig.2 of this article:
+https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019GL083544
+
+This version of the code is set to run on the CEDA jasmin platform with python2.7 and wherer the PRIMAVERA and CORDEX daily precipitation datasets are located
+
+1) create a directory where to store the pdf files (json files):
+srex_pdf_json/
+
+and an images/ directory where your code is
+The images directory will store the figures created by the code
+
+2) add the location of your datasets in european_masked_subregion.py
+
+3) search for "sberthou" is all the code to replace all the locations to your own locations
+
+4) now you can process the data to generate the intermediate json files (which will be used in a second step to generate the figures)
+in launch_all_europe.py, set your bin options, the frequency of the data ('d' for daily), if you do 1D histograms (which is what is used with the GMD PRIMAVERA vs CORDEX paper or wet/dry spells (2D histograms used in oher of my Berthou et al. papers).
+
+python2.7 launch_all_europe.py
+
+this calls launch_european_masked_subregion.py
+which launches process_data_europe.py jobs on the cluster (LOTUS on jasmin)
+you need to copy the mqsub file into your ~/.local/bin/
+
+if you want to change the bin definition or the time constraint applied to the data, do so in process_data.py
+
+process_data then calls__init__.py:
+it defines the class PrecipExtremes, which will contain the histogram, centiles and metadata for the dataset (e.g. start year and end year).
+Then the calculation is done and stored in a json file in srex_pdf_json/
+The mask provided for the subregion in european_masked_subregion.py is linearly interpolated to the datasets. 
+
+Note that iris is sometimes a bit harsh with metadata, which prevent concatenation of cubes: make sure all the attributes of the netCDF file are the same (e.g. if different netCDF per year or decade). If not, then you can add attributes_overwrite in callback_overwrite. This is the most common failure of the code.
+
+5) Once you have files in srex_pdf_json/, then you can plot the figures with launch_europe_interface.py
+specify a few options in that file.
+It will run: 
+interface_plot_european_masked_subregions.py
+in series for each bigger region (e.g. "prudence", "france")
+
+This will create a contribution histogram for a given season for different subregions (up to 6)
+It will then plot the pie plot as in the GMD paper, comparing on which percentage of given intervals the distributions are different.
+
+
+
