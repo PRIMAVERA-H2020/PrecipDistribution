@@ -1,0 +1,36 @@
+#!/usr/bin/perl
+
+if($#ARGV < 0){
+  print "Usage: $0 [-W walltime] [command]\n";
+  print "This script submits the command supplied to lotus as a batch job, with the output redirected to \$HOME/output/YYYYMMDD/JOBID.out . (Try running \"$0 ls\" as an example)\n";
+  print "The wall time can be specified using the -W option (supply wall time in the form HH:MM), or it can be picked up from the environment variable DEFAULT_WALL_TIME\n";
+  print "Other options to bsub, which will be passed on by this script, are described at http://help.ceda.ac.uk/article/113-submit-jobs\n";
+  exit();
+}
+
+#construct date string
+use POSIX 'strftime';
+$dt = strftime '%Y%m%d', localtime;
+
+#make sure output directory exists
+$OUTPUT = $ENV{'HOME'}."/output/";
+$OUTDIR = $OUTPUT.$dt;
+
+if(! -e $OUTPUT){mkdir $OUTPUT;}
+if(! -e $OUTDIR){mkdir $OUTDIR;}
+
+#submit command
+if(exists($ENV{'DEFAULT_MEM_LIMIT'})){
+   $memlimit=$ENV{'DEFAULT_MEM_LIMIT'};
+}else{
+$memlimit=10000;
+}
+$memlimit_K = $memlimit;
+$cmd = "bsub -q short-serial -o $OUTDIR/\%J.out -R \"rusage[mem=${memlimit}]\" -M ${memlimit_K} ";
+
+if(exists($ENV{'DEFAULT_WALL_TIME'})){
+  $cmd .= " -W $ENV{'DEFAULT_WALL_TIME'} ";
+}
+$cmd .= join(" ",@ARGV);
+print $cmd;
+system $cmd;
