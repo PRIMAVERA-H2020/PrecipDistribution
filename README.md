@@ -1,6 +1,30 @@
+====== Author
+
+Ségolène Berthou, Met Office, FitzRoy Road, Exeter UK
+
+(c) British Crown Copyright 2020, Met Office
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+======== Citation
+
+Users who apply the software resulting in presentations or papers are kindly asked to cite:
+
+    Klingaman, N. P., Martin, G. M., and Moise, A.: ASoP (v1.0): A set of methods for analyzing scales of precipitation in general circulation models, Geosci. Model Dev.,10, 57-83, doi:10.5194/gmd-10-57-2017, 2017
+and 
+    Berthou, S., Kendon, E., Rowell, D. P., Roberts, M. J., Tucker, S. O., & Stratton, R. A. ( 2019). Larger future intensification of rainfall in the West African Sahel in a convection‐permitting model.Geophysical Research Letters, 46, 13299–13307. https://doi.org/10.1029/2019GL083544 
+
+======== Directions of use
+
 # PrecipDistribution
 
-Calculates precipitation histograms (frequency or contribution = frequency*mean bin rate)
+Calculates precipitation histograms (frequency or contribution = frequency * mean bin rate)
 for given bins by pooling data from a region/season.
 
 This code is able to process a lot of datasets for different regions and seasons.
