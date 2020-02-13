@@ -17,10 +17,14 @@ Unless required by applicable law or agreed to in writing, software distributed 
 Users who apply the software resulting in presentations or papers are kindly asked to cite:
 
     Klingaman, N. P., Martin, G. M., and Moise, A.: ASoP (v1.0): A set of methods for analyzing scales of precipitation in general circulation models, Geosci. Model Dev.,10, 57-83, doi:10.5194/gmd-10-57-2017, 2017
+
 and 
+
     Berthou, S., Kendon, E., Rowell, D. P., Roberts, M. J., Tucker, S. O., & Stratton, R. A. ( 2019). Larger future intensification of rainfall in the West African Sahel in a convection‐permitting model.Geophysical Research Letters, 46, 13299–13307. https://doi.org/10.1029/2019GL083544 
-as done in 
-     Demory et al.
+
+as done in: 
+
+     Demory, M.-E., S. Berthou, S. L. Sørland, M. J. Roberts, U. Beyerle, J. Seddon, R. Haarsma, C. Schär, O. B. Christensen, R. Fealy, J. Fernandez, G. Nikulin, D. Peano, D. Putrasahan, C. D. Roberts, C. Steger, C. Teichmann, R. Vautard. Can high-resolution GCMs reach the level of information provided by 12-50 km CORDEX RCMs in terms of daily precipitation distribution?. Geoscientific Model Development, submitted.
 
 # Directions of use
 
@@ -29,8 +33,9 @@ for given bins by pooling data from a region/season.
 
 This code is able to process a lot of datasets for different regions and seasons.
 An example figure and the method explanation is given in fig.2 of this article:
-https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019GL083544
-This code is specifically used to compare PRIMAVERA and CORDEX precipitation distributions over Europe 
+https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019GL083544.
+
+This code is specifically designed to compare PRIMAVERA and CORDEX precipitation distributions over Europe for the Demory et al. (submitted) GMD article.
 
 This version of the code is set to run on the CEDA jasmin platform with python2.7 and wherer the PRIMAVERA and CORDEX daily precipitation datasets are located
 
