@@ -1,0 +1,23 @@
+List of Persistent Identifiers (PID) for PRIMAVERA simulations:
+
+PRIMAVERA simulations:
+
+HadGEM3-GC31-HM
+PID: hdl:21.14100/56cc0fdd-2d1b-325e-9a19-f17b3dfcacc1
+
+EC-Earth3P-HR
+PID: hdl:21.14100/739eb0bc-d9cc-3a37-b508-31b0cb0dc74c
+
+CNRM-CM6-1-HR
+PID: hdl:21.14100/c4a5d201-e4f0-373b-809b-8cdd3237f91b
+
+MPI-ESM1-2-XR
+PID: hdl:21.14100/abc256a5-aa09-3c22-bd21-af0357548884
+
+ECMWF-IFS-HR
+PID: hdl:21.14100/a468aa62-c265-3296-afde-fa2c10f4dfa2
+
+CMCC-CM2-VHR4
+The daily fields have been processed from 6-hourly fields. The datasets can be accessed via CEDA JASMIN: 
+https://prima-dm.ceda.ac.uk/received_data/?institute=CMCC&experiment=hist-1950&mip_table=Prim6hr&cmor_name=pr
+
