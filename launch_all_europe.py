@@ -31,7 +31,7 @@ def shellcmd(args):
 
 countries = [  # 'france', 'alps',
     'prudence', 
-#     'uk', 
+#     'uk',
 #    'alps', 'ibp', 'ca',
 #    'france',
     # 'germany', 'switzerland', 'spain',
@@ -49,7 +49,7 @@ for country in countries:
             for bin1 in bins:
                 #  make sure the right python is called here: python 2.?
                 # this loop calls another python script which launches jobs on the cluster
-                cmd = 'python2.7 launch_european_masked_subregion.py -c {} -r {} -f {} -s djf mam jja son -b {} -e True -w {} -t {} -o CORDEX'.format( #-o PRIMAVERA_regridded_CORDEX
+                cmd = 'python2.7 launch_european_masked_subregion.py -c {} -r {} -f {} -s djf mam jja son -b {} -e True -w {} -t {} -o new_CORDEX_11_regrid'.format( #-o PRIMAVERA_regridded_CORDEX
                     country,
                     res,
                     freq,

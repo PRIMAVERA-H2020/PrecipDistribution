@@ -2,7 +2,8 @@
 import subprocess
 
 countries = [
-    'prudence', ]  # 'france', 'alps',]#['mali','niger', 'benin']#['nimrod', 'germany', 'switzerland']#, 'niger', 'benin']
+    'prudence',]
+#     'france',]# 'alps', 'nee', 'ca', 'ibp', 'uk', 'sc', 'ce', 'md']#['mali','niger', 'benin']#['nimrod', 'germany', 'switzerland']#, 'niger', 'benin']
 frequencies = ['d']
 resolutions = ['False']  # ['True=n512', 'False=mi-ao438'] ## M-E, don't worry about this
 bins = ['exponential100']  # ['martin']

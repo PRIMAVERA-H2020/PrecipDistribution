@@ -14,8 +14,6 @@ import european_masked_subregion as ems
 import argparse
 import subprocess
 
-projdir = '/project/hires_rcm/hadek/'
-
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-c", type=str, help="for which country? (Alps/France/Spain/ukcpobs/nimrod/mali/niger/benin")
 parser.add_argument("-r", type=str, help = "for the files regridded on n512 (or model for ammacatch ", default = 'False')
@@ -146,7 +144,7 @@ for bintype in bintypes:
              arguments = para_args(cmd = cmd, msg = res)
              call_args.append(arguments)
           else:
-             lotus_cmd = 'mqsub -W 06:00 {}'.format(cmd)
+             lotus_cmd = 'mqsub -W 06:00 {}'.format(cmd)  #mqsub -W before
              argument = para_args(cmd=lotus_cmd,
                                   msg='failed to submit to LOTUS')
              shellcmd(argument)

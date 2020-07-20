@@ -10,6 +10,8 @@ import __init__
 import european_masked_subregion as ems
 import argparse
 import numpy as np
+import os
+import json 
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-c", type=str, help="for which country? (Alps/France/Spain/ukcpobs/nimrod/mali/niger/benin")
@@ -40,6 +42,35 @@ def bool_from_string(stringb):
         raise ValueError('string must be "True" or "False"')
     return bools
 
+def join_all_files_in_one(targetfile, maskedreglist, sig_dir, end_of_file):
+   dict_to_output = {'intervals':{}, 'percent_sig': {}}
+   for enu, reg in enumerate(maskedreglist, 1):
+      reg_file = '{}/{}_{}'.format(sig_dir, reg, end_of_file)
+      with open(reg_file, 'r') as fh:
+         input_dict = json.load(fh)
+         #numpy_walk(input_dict
+         for out in ['intervals', 'percent_sig']:
+            if enu == 1:
+                dict_to_output[out] = {}
+            for season in ('mam', 'jja', 'son', 'djf'):
+                if enu == 1:
+                    dict_to_output[out][season] = {}
+                dict_to_output[out][season][reg] = input_dict[out][season][reg]
+   print dict_to_output
+   with open(targetfile, 'w') as fh1:
+      json.dump(dict_to_output, fh1, indent=2, sort_keys=True) 
+
+
+def numpy_walk(node):
+    assert isinstance(node, dict), 'This function only works on dictionaries'
+    for key, item in node.items():
+        if isinstance(item, list):
+            node[key] = np.array(item)
+        else:
+            node[key] = item  # 0
+        # numpy_walk(node)
+
+
 country = args.c
 n512 = bool_from_string(args.r)
 frequency = args.f
@@ -52,163 +83,62 @@ hist_type = args.g
 wet_or_dry_spells = args.w
 thrs = args.t
 
-### this defines ensembles of models: if a model or dataset is not in an ensemble,
-# the lower/higher bounds of the bootstrapped interval will come from inter-annual variability in the pdf.
-# e.g. for the observations.
-# Note that all the members of the list need also to be defined in config further down
-ensemble_dict = {'PRIMAVERA': ['MPI-ESM1-2-XR_r1i1p1f1_EUROCORDEX',
-                               'HadGEM3-GC31-HM_r1i1p1f1_EUROCORDEX',
-		 	       'CNRM-CM6-1-HR_r1i1p1f2_EUROCORDEX',
-		 	       'EC-Earth3P-HR_r1i1p2f1_EUROCORDEX',
-			       'CMCC-CM2-VHR4_r1i1p1f1_EUROCORDEX', 
-		 	       'ECMWF-IFS-HR_r1i1p1f1_EUROCORDEX',
-                               #'ECMWF-IFS-HR_r2i1p1f1_EUROCORDEX',
-                               ###'ECMWF-IFS-HR_r3i1p1f1_EUROCORDEX',
-                               #'ECMWF-IFS-HR_r4i1p1f1_EUROCORDEX',
-                               #'ECMWF-IFS-HR_r5i1p1f1_EUROCORDEX',
-                               #'ECMWF-IFS-HR_r6i1p1f1_EUROCORDEX',
-		 	       ],
-                 #'PRIMAVERA': ['MPI-ESM1-2-XR_r1i1p1f1',
-                 #              'HadGEM3-GC31-HM_r1i1p1f1',
-	         #	       'CNRM-CM6-1-HR_r1i1p1f2',
-		 #              'EC-Earth3P-HR_r1i1p2f1',
-		 #	       'CMCC-CM2-VHR4_r1i1p1f1',
-	         #               'ECMWF-IFS-HR_r1i1p1f1',
-                 #               'ECMWF-IFS-HR_r2i1p1f1',
-                 #               'ECMWF-IFS-HR_r3i1p1f1',
-                 #               'ECMWF-IFS-HR_r4i1p1f1',
-                 #               'ECMWF-IFS-HR_r5i1p1f1',
-                 #               'ECMWF-IFS-HR_r6i1p1f1',
-		 #               ],
-		 #'PRIMAVERA LR': ['EC-Earth3P_r1i1p2f1',
-		 #		  'MPI-ESM1-2-HR_r1i1p1f1',
-		 #		  'CNRM-CM6-1_r1i1p1f2',
-		 #		  'HadGEM3-GC31-LL_r1i1p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i2p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i3p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i4p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i5p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i6p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i7p1f1',
-		 #		  'HadGEM3-GC31-LL_r1i8p1f1',
-		 #                'CMCC-CM2-HR4_r1i1p1f1',
-		 # 		  'ECMWF-IFS-LR_r1i1p1f1',
-		 #		  'ECMWF-IFS-LR_r2i1p1f1',
-		 #		  'ECMWF-IFS-LR_r3i1p1f1',
-		 #		  'ECMWF-IFS-LR_r4i1p1f1',
-		 #		  'ECMWF-IFS-LR_r5i1p1f1',
-		 #		  'ECMWF-IFS-LR_r6i1p1f1',
-		 #		  'ECMWF-IFS-LR_r7i1p1f1',
-		 #		  'ECMWF-IFS-LR_r8i1p1f1',
-		 # 		  ],
-		 #'CORDEX12': ['CCLM-MPI',
-                 #	   'CCLM-CNRM',
-                 #	   'CCLM-EC-EARTH',
-                 #	   'HIRHAM-CNRM',  
-                 #	   'HIRHAM-EC-EARTH',		     
-                 #	   'RACMO-CNRM',   
-                 #	   'RACMO-EC-EARTH',		     
-                 #	   'RACMO-HadGEM', 
-                 #	   'REMO-MPI',
-                 #	   'RCA-CNRM',
-                 #	   'RCA-EC-EARTH', 
-                 #	   'RCA-HadGEM',   
-                 #	   'RCA-MPI',
-                 #	   #'HIRHAM-NorESM', #select only RCM forced by CMIP5 GCMs similar to PRIMAVERA
-                 #	   #'REMO-IPSL',
-                 #	   #'REMO-NorESM',  
-                 #	   #'REMO-GFDL',
-                 #	   #'WRF-IPSL',  #zero/nan values in json file
-                 #	   #'RACMO-NorESM', 
-                 #	   #'RCA-IPSL',
-                 #	   #'RCA-NorESM',
-		 #	   ],
-		 'CORDEX-44':['CCLM-MPI_50km',
-                 	   'CCLM5-CNRM_50km',		      
-                 	   'CCLM5-EC-EARTH_50km',	     
-                 	   'CCLM5-MPI_50km',
-		 	           'CCLM5-HadGEM_50km', 
-                 	   'HIRHAM-EC-EARTH_50km',	   
-                 	   'WRF-EC-EARTH_50km', 
-                 	   'RACMO-EC-EARTH_50km',	   
-                	   'RACMO-HadGEM_50km', 	   
-                 	   'REMO-MPI_50km',
-                 	   'RCA-CNRM_50km',
-                 	   'RCA-EC-EARTH_50km', 	   
-                 	   'RCA-HadGEM_50km',		   
-                 	   'RCA-MPI_50km',
-                 	   'CCLM5-MIROC_50km',  #only include RCMs forced with CMIP5 GCMs similar to PRIMAVERA  	   
-                 	   'WRF-IPSL_50km',  #zero/nan values in json file: problems when creating json
-                 	   'RCA-CanESM_50km', #		  
-                 	   'RCA-CSIRO_50km',	#	  
-                 	   'RCA-IPSL_50km',#
-                 	   'RCA-MIROC_50km',#		  
-                 	   'RCA-NorESM_50km',#
-                 	   'RCA-GFDL_50km',#
-                       'RegCM-HadGEM_50km',
-                       'ALADIN-CNRM1_50km',
-                       'ALARO-CNRM_50km',
-                       'WRF-CanESM_50km',#
-                       #'REMO-MPI2_50km', # not including second REMO member
-		 	  ],
-	         #'CMIP5':['MPI-ESM-LR',
-                 #	  'CNRM-CM5',
-                 #	  'EC-EARTH',
-                 #	  'HadGEM2-ES',
-                 #	  #'NorESM1-M', #select only CMIP5 GCMs similar to PRIMAVERA
-                 #	  #'IPSL-CM5A-LR',
-                 #	  #'IPSL-CM5A-MR',
-                 #	  #'GFDL-ESM2G',
-                 #	  #'MIROC5',
-                 #	  #'CanESM2',
-                 #	  #'CSIRO-Mk3-6-0',
-                 #	  #'GFDL-ESM2M',
-		 #	  ],
-		 }
-#what_to_bootstrap = ['PRIMAVERA', 'CORDEX-44', 'obs_on_12km']
-what_to_bootstrap = ['PRIMAVERA', 'CORDEX-44', 'obs_cordex50']
-#what_to_bootstrap = [ 'PRIMAVERA']
+#ensembles_to_compare = ['PRIMAVERA', 'CORDEX-44', 'obs_cordex50']
+ensembles_to_compare = ['PRIMAVERA', 'CORDEX-11_regrid', 'obs_cordex50']
+#ensembles_to_compare = [ 'PRIMAVERA']
+bootstrap_or_centiles = 'centiles' 
 
-## this provides the 
-bootstrap_config = {
+### generate ensemble_dict: the dictionary containing all models names in each ensemble. 
+### The observations are not in this as interannual variability rather than inter-member is calculated
+ensemble_dict = {}
+for ens in ensembles_to_compare:
+    if not 'obs' in ens.lower():
+        runlist, _ = ems.get_runlist_region('d', False, 'prudence', other=ens)
+        ensemble_dict[ens] = runlist.keys()
+
+## this provides the bootstrap configuration, if bootstrapping is chosen to compare the ensembles
+nb_bootstrap_iter = 999999
+bootstrap_config = {}
+if bootstrap_or_centiles == 'bootstrap':
+    bootstrap_config = {
                    'PRIMAVERA':
 			{'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
 			 'bootstrap_no_years': len(ensemble_dict['PRIMAVERA']),  # number of PRIMAVERA models
-			 'bootstrap_sample_size': 99,  # NB if this goes > 999 (3 digits) formatting fails
- 		 'bootstrap_samples_split': [0, 99],  # NB if this goes > 999 (3 digits) formatting fails
-			 'bootstrap_filename': 'bootstrap_ranint_master_primavera_100.txt',  # I/O name for bootstrap years
+			 'bootstrap_sample_size': nb_bootstrap_iter,  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+ 		 'bootstrap_samples_split': [0, nb_bootstrap_iter],  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+			 'bootstrap_filename': 'bootstrap_ranint_master_primavera_{}.txt'.format(nb_bootstrap_iter),  # I/O name for bootstrap years
 			 'master_ref_year': 1997, # random
 			},
 		    #'PRIMAVERA LR':
-		    #	{'bootstrap_produce_file': True,  # True if want to generate bootstrapping random years rather than use exisiting file
+		    #	{'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
 		    #	 'bootstrap_no_years': len(ensemble_dict['PRIMAVERA LR']),  # number of PRIMAVERA models
-		    #	 'bootstrap_sample_size': 999,  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_samples_split': [0, 999],  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_filename': 'bootstrap_ranint_master_primavera_lr.txt',  # I/O name for bootstrap years
+		    #	 'bootstrap_sample_size': nb_bootstrap_iter,  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    #	 'bootstrap_samples_split': [0, nb_bootstrap_iter],  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    #	 'bootstrap_filename': 'bootstrap_ranint_master_primavera_lr_{}.txt'.format(nb_bootstrap_iter),  # I/O name for bootstrap years
 		    #	 'master_ref_year': 1997, # random
 		    #	},
 		    #'CMIP5':
-		    #	{'bootstrap_produce_file': True,  # True if want to generate bootstrapping random years rather than use exisiting file
+		    #	{'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
 		    #	 'bootstrap_no_years': len(ensemble_dict['CMIP5']),  # number of PRIMAVERA models
-		    #	 'bootstrap_sample_size': 999,  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_samples_split': [0, 999],  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_filename': 'bootstrap_ranint_master_cmip5.txt',  # I/O name for bootstrap years
+		    #	 'bootstrap_sample_size': nb_bootstrap_iter,  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    #	 'bootstrap_samples_split': [0, nb_bootstrap_iter],  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    #	 'bootstrap_filename': 'bootstrap_ranint_master_cmip5_{}.txt'.format(nb_bootstrap_iter),  # I/O name for bootstrap years
 		    #	 'master_ref_year': 1997, # random
 		    #	},
-		    #'CORDEX12':
-		    #	{'bootstrap_produce_file': True,  # True if want to generate bootstrapping random years rather than use exisiting file
-		    #	 'bootstrap_no_years': len(ensemble_dict['CORDEX12']),  # number of PRIMAVERA models
-		    #	 'bootstrap_sample_size': 999,  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_samples_split': [0, 999],  # NB if this goes > 999 (3 digits) formatting fails
-		    #	 'bootstrap_filename': 'bootstrap_ranint_master_cordex12.txt',  # I/O name for bootstrap years
-		    #	 'master_ref_year': 1997, # random
-		    #	},
-		    'CORDEX-44':
+		    'CORDEX-11_regrid_reduced':
+		    	{'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
+		    	 'bootstrap_no_years': 38,#len(ensemble_dict['CORDEX12']),  # number of PRIMAVERA models
+		    	 'bootstrap_sample_size': nb_bootstrap_iter,  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    	 'bootstrap_samples_split': [0, nb_bootstrap_iter],  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		    	 'bootstrap_filename': 'bootstrap_ranint_master_cordex12_{}.txt'.format(nb_bootstrap_iter),  # I/O name for bootstrap years
+		    	 'master_ref_year': 1997, # random
+		    	},
+		    'CORDEX-44_reduced':
 		       {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
-		        'bootstrap_no_years': len(ensemble_dict['CORDEX-44']),  # number of PRIMAVERA models
-		        'bootstrap_sample_size': 999,  # NB if this goes > 999 (3 digits) formatting fails
-		        'bootstrap_samples_split': [0, 999],  # NB if this goes > 999 (3 digits) formatting fails
-		        'bootstrap_filename': 'bootstrap_ranint_master_cordex50.txt',  # I/O name for bootstrap years
+		        'bootstrap_no_years': 26, #len(ensemble_dict['CORDEX-44_reduced']),  # number of PRIMAVERA models
+		        'bootstrap_sample_size': nb_bootstrap_iter,  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		        'bootstrap_samples_split': [0, nb_bootstrap_iter],  # NB if this goes > nb_bootstrap_iter (3 digits) formatting fails
+		        'bootstrap_filename': 'bootstrap_ranint_master_cordex50_{}.txt'.format(nb_bootstrap_iter),  # I/O name for bootstrap years
 		        'master_ref_year': 1997, # random
 		       },		       
 		    #'obs_on_12km':
@@ -217,84 +147,83 @@ bootstrap_config = {
 		       'run_IP_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
 		       {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
 		        'bootstrap_no_years': 33,  # nb of OBS years, different by region
-		        'bootstrap_sample_size': 999,
-		        'bootstrap_samples_split': [0, 999],
-		        'bootstrap_filename': 'bootstrap_ranint_master_ibp.txt',  # change file name by region
+		        'bootstrap_sample_size': nb_bootstrap_iter,
+		        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+		        'bootstrap_filename': 'bootstrap_ranint_master_ibp_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
 		        'master_ref_year': 1971, # start year, different by region
 		       },
                        'run_AL_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_alps.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_alps_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },		      
                        'run_BI_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999, 
-                        'bootstrap_samples_split': [0, 999], 
-                        'bootstrap_filename': 'bootstrap_ranint_master_uk.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter, 
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter], 
+                        'bootstrap_filename': 'bootstrap_ranint_master_uk_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        }, 
 		       'run_CA_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_carpathian.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_carpathian_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },
 		       'run_FR_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                    	'bootstrap_sample_size': 999,
-                    	'bootstrap_samples_split': [0, 999],
-                    	'bootstrap_filename': 'bootstrap_ranint_master_france.txt',  # change file name by region
+                    	'bootstrap_sample_size': nb_bootstrap_iter,
+                    	'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                    	'bootstrap_filename': 'bootstrap_ranint_master_france_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                     	'master_ref_year': 1971, # start year, different by region
                        },
                        'run_CE_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_germany.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_germany_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },
                        'run_MD_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_mediterranean.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_mediterranean_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },
                        'run_SC_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_scandinavia.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_scandinavia_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },
                        'run_NEE_'+distribution+'.json': ###ME2 creer une entree par region qui a des observations. modifier les champs ci-dessous en fonction de ce qu'il y a dans le .json file
                        {'bootstrap_produce_file': False,  # True if want to generate bootstrapping random years rather than use exisiting file
                         'bootstrap_no_years': 35,  # nb of OBS years, different by region
-                        'bootstrap_sample_size': 999,
-                        'bootstrap_samples_split': [0, 999],
-                        'bootstrap_filename': 'bootstrap_ranint_master_scandinavia.txt',  # change file name by region
+                        'bootstrap_sample_size': nb_bootstrap_iter,
+                        'bootstrap_samples_split': [0, nb_bootstrap_iter],
+                        'bootstrap_filename': 'bootstrap_ranint_master_scandinavia_{}.txt'.format(nb_bootstrap_iter),  # change file name by region
                         'master_ref_year': 1971, # start year, different by region
                        },
                        }, 
 		    }   
 
-
-if bootstrap_config:
-    for ens in what_to_bootstrap:
+########## Generate bootstrapping files #############
+    for ens in ensembles_to_compare:
 	#if ens == 'obs_on_12km':
-	print 'ens = ', ens
-	if ens == 'obs_cordex50':
+     print 'ens = ', ens
+     if ens == 'obs_cordex50':
 	    for region in bootstrap_config[ens].keys():
 	        #print 'region = ', region
 		if bootstrap_config[ens][region]['bootstrap_produce_file']:
@@ -304,20 +233,21 @@ if bootstrap_config:
 						    size=(bootstrap_config[ens][region]['bootstrap_sample_size'],
 							  bootstrap_config[ens][region]['bootstrap_no_years']))
 			multi_placeholder = "{:2d} " * bootstrap_config[ens][region]['bootstrap_no_years']
-			string_placeholder = "{:3d} " + multi_placeholder + "\n"
+			string_placeholder = "{:6d} " + multi_placeholder + "\n"
 			for a in range(0, bootstrap_config[ens][region]['bootstrap_sample_size']):
 			    file.write(string_placeholder.format(a, *ran_out[a]))
-	else:
+     else:
 	    if bootstrap_config[ens]['bootstrap_produce_file']:
 		with open(bootstrap_config[ens]['bootstrap_filename'], "w") as file:
 		    ran_out = np.random.randint(0, bootstrap_config[ens]['bootstrap_no_years'],
 						size=(bootstrap_config[ens]['bootstrap_sample_size'],
 						      bootstrap_config[ens]['bootstrap_no_years']))
 		    multi_placeholder = "{:2d} " * bootstrap_config[ens]['bootstrap_no_years']
-		    string_placeholder = "{:3d} " + multi_placeholder + "\n"
+		    string_placeholder = "{:6d} " + multi_placeholder + "\n"
 		    for a in range(0, bootstrap_config[ens]['bootstrap_sample_size']):
 			file.write(string_placeholder.format(a, *ran_out[a]))
 
+###### x axis limits for plots #####
 xlim = {'d': (0.9, 500),
         'h': (0.02, 60)}  # (1./24./4., 100)
 savefig = True
@@ -348,49 +278,6 @@ class Region(object):
         self.lat_end = lat_end  # float
         self.plotppt = dictppt  # dictionary with plotting properties, used for figure = True (see Europe example)
 
-
-class Alps(object):
-    def __init__(self):
-        self.region = Region('ALPS', lon_start=3.0, lon_end=18.0, \
-                             lat_start=42, lat_end=50, \
-                             dictppt={})
-
-
-class Spain(object):
-    def __init__(self):
-        self.region = Region('SPAIN', lon_start=-10.0, lon_end=5.0, \
-                             lat_start=35.0, lat_end=44.0, \
-                             dictppt={})
-
-
-class France(object):
-    def __init__(self):
-        self.region = Region('FRANCE', lon_start=-6.0, lon_end=10.0, \
-                             lat_start=40, lat_end=52, \
-                             dictppt={})
-
-
-class UK(object):
-    def __init__(self):
-        self.region = Region('UK', lon_start=-11.0, lon_end=3.0, \
-                             lat_start=48, lat_end=62, \
-                             dictppt={})
-
-
-class Germany(object):
-    def __init__(self):
-        self.region = Region('Germany', lon_start=5.5, lon_end=15.5, \
-                             lat_start=47, lat_end=55, \
-                             dictppt={})
-
-
-class Swiss(object):
-    def __init__(self):
-        self.region = Region('Switzerland', lon_start=5.5, lon_end=11.0, \
-                             lat_start=45, lat_end=48, \
-                             dictppt={})
-
-
 class Europe(object):
     def __init__(self):
         self.region = Region('EUROPE',
@@ -399,33 +286,17 @@ class Europe(object):
                              dictppt={})
 
 
-class Niger(object):
-    def __init__(self):
-        self.region = Region('NIGER', lon_start=-6, lon_end=6.0, \
-                             lat_start=4.5, lat_end=20, \
-                             dictppt={})
-
-
 _, maskedreglist = ems.get_runlist_region(frequency, n512, country, other)
 
-country_limits = {'spain': Spain().region,
-                  'ukcpobs': UK().region,
-                  'nimrod': UK().region,
-                  'france': France().region,
-                  'switzerland': Swiss().region,
-                  'germany': Germany().region,
-                  'alps': Alps().region,
-                  'niger': Niger().region,
-                  'benin': Niger().region,
-                  'mali': Niger().region,
-                  'med': Europe().region,
-                  'cen_europe': Europe().region,
-                  'above_1500': Europe().region,
-                  'med': Europe().region,
-                  'neur': Europe().region,
+country_limits = {
                   'europe': Europe().region,
-                  'mediterranean': Europe().region,
                   'prudence': Europe().region,
+                  'nee': Europe().region,
+                  'ca': Europe().region,
+                  'ibp': Europe().region,
+                  'uk': Europe().region,
+                  'sc': Europe().region,
+                  'ce': Europe().region,
                   }
 
 region_limits = country_limits[country]
@@ -440,156 +311,22 @@ else:
     hists = ['hist2d_{}_{}_{:d}.json'.format(reg_masked, wet_or_dry_spells, int(thrs)) for reg_masked in
              maskedreglist.keys()]
 
-if n512:
-    config = {'jsondir': 'srex_pdf_json' + json_freq[frequency],
-              'histfile': {  # country+'_on_n512':hists,
-                  '2p2_on_n512': hists,
-                  'n512': hists,
-                  'n512_future': hists,
-                  '2p2f_on_n512': hists,
-              }
-              }
-
-else:
-
-    config = {
+config = {
               'jsondir': '{}/srex_pdf_json{}'.format(localdir, json_freq[frequency]),
-              'histfile': {# this is where you need to put CORDEX model names for plotting (name must be the same as the one in european_masked_subregion.py)
-                           #
-			   #EUR11 models
-			   #'CCLM-MPI': hists,
-                           #'CCLM-CNRM': hists,
-                           #'CCLM-EC-EARTH': hists,
-                           #'HIRHAM-CNRM': hists,  
-                           #'HIRHAM-EC-EARTH': hists,		       
-                           #'RACMO-CNRM': hists,   
-                           #'RACMO-EC-EARTH': hists,		       
-                           #'RACMO-HadGEM': hists, 
-                           #'REMO-MPI': hists,
-                           #'RCA-CNRM': hists,
-                           #'RCA-EC-EARTH': hists, 
-                           #'RCA-HadGEM': hists,   
-                           #'RCA-MPI': hists,
-                           #'RCA-NorESM': hists,  #only include RCMs forced with CMIP5 GCMs similar to PRIMAVERA	 
-                           #'HIRHAM-NorESM': hists,
-                           #'REMO-IPSL': hists,
-                           #'REMO-NorESM': hists,  
-                           #'REMO-GFDL': hists,
-                           #'WRF-IPSL': hists,
-                           #'RACMO-NorESM': hists, 
-                           #'RCA-IPSL': hists,
-                           ###'CCLM-HadGEM': hists, #These have no lon/lat coord  
-                           ###'ALADIN-CNRM1': hists,
-                           ###'ALADIN-CNRM2': hists,
-                           ###'ALARO-CNRM': hists,  
-                           #
-                           ##EUR44 models
-                           'CCLM-MPI_50km': hists,
-                           'CCLM5-CNRM_50km': hists,		     
-                           'CCLM5-EC-EARTH_50km': hists,	     
-                           'CCLM5-MPI_50km': hists,		    
-                           'HIRHAM-EC-EARTH_50km': hists,	    
-                           'WRF-EC-EARTH_50km': hists, #zero/nan values in json file
-                           'RACMO-EC-EARTH_50km': hists,	    
-                           'RACMO-HadGEM_50km': hists,  	    
-                           'REMO-MPI_50km': hists,
-                           'RCA-CNRM_50km': hists,
-                           'RCA-EC-EARTH_50km': hists,  	    
-                           'RCA-HadGEM_50km': hists,		    
-                           'RCA-MPI_50km': hists, 
-                           'CCLM5-MIROC_50km': hists,  #only include RCMs forced with CMIP5 GCMs similar to PRIMAVERA	    
-                           'WRF-IPSL_50km': hists, #zero/nan values in json file
-                           'RCA-CanESM_50km': hists,#		   
-                           'RCA-CSIRO_50km': hists,#		   
-                           'RCA-IPSL_50km': hists,#
-                           'RCA-MIROC_50km': hists,#		   
-                           'RCA-NorESM_50km': hists,#
-                           'RCA-GFDL_50km': hists,#
-                           'CCLM5-HadGEM_50km': hists, #These have no lon/lat coord  	       
-                           'ALADIN-CNRM1_50km': hists,	      
-                           ###'ALADIN-CNRM2_50km': hists,#		 
-                           'WRF-CanESM_50km': hists, 	#	 
-                           'RegCM-HadGEM_50km': hists,		 
-                           'ALARO-CNRM_50km': hists, 		 
-                           #
-                           #CMIP5 models
-                           #'MPI-ESM-LR': hists,
-                           #'CNRM-CM5': hists,
-                           #'EC-EARTH': hists,
-                           #'HadGEM2-ES': hists,
-                           #'NorESM1-M': hists,
-                           #'IPSL-CM5A-LR': hists,
-                           #'IPSL-CM5A-MR': hists,
-                           #'GFDL-ESM2G': hists,
-                           #'MIROC5': hists,
-                           #'CanESM2': hists,
-                           #'CSIRO-Mk3-6-0': hists,
-                           #'GFDL-ESM2M': hists,
-			   #
-			   #HighResMIP high-resolution models (HR)
-			   #'EC-Earth3P-HR_r1i1p2f1': hists,   #36km
-			   #'HadGEM3-GC31-HM_r1i1p1f1': hists, #25km
-			   #'CMCC-CM2-VHR4_r1i1p1f1': hists,   #18km
-			   #'MPI-ESM1-2-XR_r1i1p1f1': hists,   #34km
-			   #'CNRM-CM6-1-HR_r1i1p1f2': hists,   #50km
-			   #'ECMWF-IFS-HR_r1i1p1f1': hists,    #25km regridded at 50km
-			   #'ECMWF-IFS-HR_r2i1p1f1': hists,   #put only 1 member per model
-			   ##'ECMWF-IFS-HR_r3i1p1f1': hists,
-			   #'ECMWF-IFS-HR_r4i1p1f1': hists,
-			   #'ECMWF-IFS-HR_r5i1p1f1': hists,
-			   #'ECMWF-IFS-HR_r6i1p1f1': hists,
-			   #HighResMIP high-resolution models (HR) regridded at 50km
-			   'EC-Earth3P-HR_r1i1p2f1_EUROCORDEX': hists, 
-			   'HadGEM3-GC31-HM_r1i1p1f1_EUROCORDEX': hists,
-			   'CMCC-CM2-VHR4_r1i1p1f1_EUROCORDEX': hists,
-			   'MPI-ESM1-2-XR_r1i1p1f1_EUROCORDEX': hists,
-			   'CNRM-CM6-1-HR_r1i1p1f2_EUROCORDEX': hists,
-			   'ECMWF-IFS-HR_r1i1p1f1_EUROCORDEX': hists,
-			   #'ECMWF-IFS-HR_r2i1p1f1_EUROCORDEX': hists,
-			   ###'ECMWF-IFS-HR_r3i1p1f1_EUROCORDEX': hists,
-			   #'ECMWF-IFS-HR_r4i1p1f1_EUROCORDEX': hists,
-			   #'ECMWF-IFS-HR_r5i1p1f1_EUROCORDEX': hists,
-			   #'ECMWF-IFS-HR_r6i1p1f1_EUROCORDEX': hists,
-			   #
-			   #HighResMIP low-resolution models (LR)
-			   #'EC-Earth3P_r1i1p2f1': hists,    #71km
-			   #'MPI-ESM1-2-HR_r1i1p1f1': hists, #67km
-			   #'CMCC-CM2-HR4_r1i1p1f1': hists,  #63km
-			   #'ECMWF-IFS-LR_r1i1p1f1': hists,  #50km regridded at 100km
-			   #'ECMWF-IFS-LR_r2i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r3i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r4i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r5i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r6i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r7i1p1f1': hists,
-			   #'ECMWF-IFS-LR_r8i1p1f1': hists,
-			   #'CNRM-CM6-1_r1i1p1f2': hists,      #142km
-			   #'HadGEM3-GC31-LL_r1i1p1f1': hists, #135km
-			   #'HadGEM3-GC31-LL_r1i2p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i3p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i4p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i5p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i6p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i7p1f1': hists,
-			   #'HadGEM3-GC31-LL_r1i8p1f1': hists,
-			   #
-			   #Observations
-			   #'obs_on_12km': hists,
-			   'obs_cordex50': hists,
-               'obs_cordex50_scale': hists,
-                           #'GPCP': hists,
-                           }
-              }
+              'significance_dir' : '{}/sig_dir_EUR11_welch_all{}'.format(localdir, json_freq[frequency]),
+              'histfile': {               #Observations
+                           #'obs_on_12km': hists,
+                           'obs_cordex50': hists,
+                           #'obs_cordex50_scale': hists,
+                          }
+         }
 
-# diff_btw_res = ['n512', 'n512_future',
-#                 '2p2_on_n512', '2p2f_on_n512',
-#                 'n512', '2p2_on_n512',
-#                 'n512_future', '2p2f_on_n512', ]
-# diff_btw_res=[
-#             country+'_on_12km', '2p2erai_on_12km', 
-#             country+'_on_12km', 'mi-ao438',
-#             country+'_on_12km', '2p2eth_on_12km',
-#             country+'_on_12km', '12eth_on_12km']
+for ens in ensemble_dict:
+    for model in ensemble_dict[ens]:
+        config['histfile'][model] = hists
+
+print 'config', config
+
 diff_btw_res = None
 
 res_todo = config['histfile'].keys()  # ['ukcpobs', '2p2erai', '2p2']#config['histfile'].keys()
@@ -598,127 +335,19 @@ res_todo = config['histfile'].keys()  # ['ukcpobs', '2p2erai', '2p2']#config['hi
 colordict = {#colours 'b','r','k','gold','k','y','c','m','g','aquamarine','darkgreen'
              #
 	     #EUR11 models (plot in dark blue)
-	     'CORDEX12': ['darkblue', 1, '-'],
-	     'CCLM-MPI': ['darkblue', 1, '-'],
-             'CCLM-CNRM': ['darkblue', 1, '-'],
-             'CCLM-EC-EARTH': ['darkblue', 1, '-'],
-             'CCLM-HadGEM': ['darkblue', 1, '-'],  
-             'ALADIN-CNRM1': ['darkblue', 1, '-'],
-             'ALADIN-CNRM2': ['darkblue', 1, '-'],
-             'HIRHAM-CNRM': ['darkblue', 1, '-'],  
-             'HIRHAM-EC-EARTH': ['darkblue', 1, '-'],			
-             'HIRHAM-NorESM': ['darkblue', 1, '-'],
-             'REMO-IPSL': ['darkblue', 1, '-'],
-             'REMO-NorESM': ['darkblue', 1, '-'],  
-             'REMO-GFDL': ['darkblue', 1, '-'],
-             'WRF-IPSL': ['darkblue', 1, '-'],
-             'RACMO-CNRM': ['darkblue', 1, '-'],   
-             'RACMO-EC-EARTH': ['darkblue', 1, '-'],			
-             'RACMO-HadGEM': ['darkblue', 1, '-'], 
-             'RACMO-NorESM': ['darkblue', 1, '-'], 
-             'REMO-MPI': ['darkblue', 1, '-'],
-             'ALARO-CNRM': ['darkblue', 1, '-'],  
-             'RCA-CNRM': ['darkblue', 1, '-'],
-             'RCA-EC-EARTH': ['darkblue', 1, '-'], 
-             'RCA-IPSL': ['darkblue', 1, '-'],
-             'RCA-HadGEM': ['darkblue', 1, '-'],   
-             'RCA-MPI': ['darkblue', 1, '-'],
-             'RCA-NorESM': ['darkblue', 1, '-'],   
-             #
+	     'CORDEX-11': ['darkblue', 1, '-'],
+         'CORDEX-11_regrid': ['darkblue', 1, '-'],
 	     #EUR44 models (plot in dark red)
              'CORDEX-44': ['darkred', 1, '-'],
-             'CCLM-MPI_50km': ['darkred', 1, '-'],
-             'CCLM5-CNRM_50km': ['darkred', 1, '-'],	       
-             'CCLM5-EC-EARTH_50km': ['darkred', 1, '-'],	       
-             'CCLM5-HadGEM_50km': ['darkred', 1, '-'],         
-             'CCLM5-MIROC_50km': ['darkred', 1, '-'],	       
-             'CCLM5-MPI_50km': ['darkred', 1, '-'],		       
-             'ALADIN-CNRM1_50km': ['darkred', 1, '-'], 	       
-             'ALADIN-CNRM2_50km': ['darkred', 1, '-'], 	       
-             'HIRHAM-EC-EARTH_50km': ['darkred', 1, '-'],	       
-             'WRF-IPSL_50km': ['darkred', 1, '-'],
-             'WRF-CanESM_50km': ['darkred', 1, '-'],	       
-             'WRF-EC-EARTH_50km': ['darkred', 1, '-'],         
-             'RegCM-HadGEM_50km': ['darkred', 1, '-'], 	       
-             'RACMO-EC-EARTH_50km': ['darkred', 1, '-'],	       
-             'RACMO-HadGEM_50km': ['darkred', 1, '-'],         
-             'REMO-MPI_50km': ['darkred', 1, '-'],
-             'ALARO-CNRM_50km': ['darkred', 1, '-'],	       
-             'RCA-CanESM_50km': ['darkred', 1, '-'],	       
-             'RCA-CNRM_50km': ['darkred', 1, '-'],
-             'RCA-CSIRO_50km': ['darkred', 1, '-'],		       
-             'RCA-EC-EARTH_50km': ['darkred', 1, '-'],         
-             'RCA-IPSL_50km': ['darkred', 1, '-'],
-             'RCA-MIROC_50km': ['darkred', 1, '-'],		       
-             'RCA-HadGEM_50km': ['darkred', 1, '-'],	       
-             'RCA-MPI_50km': ['darkred', 1, '-'], 
-             'RCA-NorESM_50km': ['darkred', 1, '-'],
-             'RCA-GFDL_50km': ['darkred', 1, '-'],
-             #
 	     #CMIP5 models (plot in green)
              'CMIP5': ['chartreuse', 1, '-'],
-             'MPI-ESM-LR': ['chartreuse', 1, '-'],
-             'CNRM-CM5': ['chartreuse', 1, '-'],
-             'EC-EARTH': ['chartreuse', 1, '-'],
-             'HadGEM2-ES': ['chartreuse', 1, '-'],
-             'NorESM1-M': ['chartreuse', 1, '-'],
-             'IPSL-CM5A-LR': ['chartreuse', 1, '-'],
-             'IPSL-CM5A-MR': ['chartreuse', 1, '-'],
-             'GFDL-ESM2G': ['chartreuse', 1, '-'],
-             'MIROC5': ['chartreuse', 1, '-'],
-             'CanESM2': ['chartreuse', 1, '-'],
-             'CSIRO-Mk3-6-0': ['chartreuse', 1, '-'],
-             'GFDL-ESM2M': ['chartreuse', 1, '-'],
-	     #
+             'CMIP5_reduced': ['chartreuse', 1, '-'],
 	     #HighResMIP HR (resolution at 50N)
 	     #'PRIMAVERA': ['gold', 2, '-'],
-	     'EC-Earth3P-HR_r1i1p2f1': ['gold', 2, '-'],  #36km
-	     'HadGEM3-GC31-HM_r1i1p1f1': ['gold', 2, '-'],#25km
-             'CMCC-CM2-VHR4_r1i1p1f1': ['gold', 2, '-'],  #18km
-	     'MPI-ESM1-2-XR_r1i1p1f1': ['gold', 2, '-'],  #34km
-	     'CNRM-CM6-1-HR_r1i1p1f2': ['gold', 1, '-'],  #50km
-	     'ECMWF-IFS-HR_r1i1p1f1': ['gold', 2, '-'],   #25km regridded at 50km
-	     'ECMWF-IFS-HR_r2i1p1f1': ['gold', 2, '-'],
-	     'ECMWF-IFS-HR_r3i1p1f1': ['gold', 2, '-'],
-	     'ECMWF-IFS-HR_r4i1p1f1': ['gold', 2, '-'],
-	     'ECMWF-IFS-HR_r5i1p1f1': ['gold', 2, '-'],
-	     'ECMWF-IFS-HR_r6i1p1f1': ['gold', 2, '-'],
 	     #HighResMIP HR regridded at 50km resolution
 	     'PRIMAVERA': ['orange', 1, '-'],
-	     'EC-Earth3P-HR_r1i1p2f1_EUROCORDEX': ['orange', 2, '-'],
-	     'HadGEM3-GC31-HM_r1i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-             'CMCC-CM2-VHR4_r1i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'MPI-ESM1-2-XR_r1i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'CNRM-CM6-1-HR_r1i1p1f2_EUROCORDEX': ['orange', 1, '-'],
-	     'ECMWF-IFS-HR_r1i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'ECMWF-IFS-HR_r2i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'ECMWF-IFS-HR_r3i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'ECMWF-IFS-HR_r4i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'ECMWF-IFS-HR_r5i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     'ECMWF-IFS-HR_r6i1p1f1_EUROCORDEX': ['orange', 2, '-'],
-	     #
 	     #HighResMIP LR (resolution at 50N)
 	     'PRIMAVERA LR': ['k', 1, '-'],
-	     'EC-Earth3P_r1i1p2f1': ['k', 1, '-'],    #71km
-	     'MPI-ESM1-2-HR_r1i1p1f1': ['k', 1, '-'], #67km	     
-             'CMCC-CM2-HR4_r1i1p1f1': ['k', 1, '-'],  #64km
-	     'ECMWF-IFS-LR_r1i1p1f1': ['k', 1, '-'],  #50km regridded at 100km
-	     'ECMWF-IFS-LR_r2i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r3i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r4i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r5i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r6i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r7i1p1f1': ['k', 1, '-'],
-	     'ECMWF-IFS-LR_r8i1p1f1': ['k', 1, '-'],
-	     'CNRM-CM6-1_r1i1p1f2': ['k', 1, '-'],      #142km
-	     'HadGEM3-GC31-LL_r1i1p1f1': ['k', 1, '-'], #135km
-	     'HadGEM3-GC31-LL_r1i2p1f1': ['k', 1, '-'],
-		'HadGEM3-GC31-LL_r1i3p1f1': ['k', 1, '-'],
-	     'HadGEM3-GC31-LL_r1i4p1f1': ['k', 1, '-'],
-	     'HadGEM3-GC31-LL_r1i5p1f1': ['k', 1, '-'],
-	     'HadGEM3-GC31-LL_r1i6p1f1': ['k', 1, '-'],
-	     'HadGEM3-GC31-LL_r1i7p1f1': ['k', 1, '-'],
-	     'HadGEM3-GC31-LL_r1i8p1f1': ['k', 1, '-'],
 	     #
 	     #Observations
 	     #'obs_on_12km': ['black', 4, '-'],
@@ -729,18 +358,46 @@ colordict = {#colours 'b','r','k','gold','k','y','c','m','g','aquamarine','darkg
 
 # ### ME: not needed, but if you want to change the model names on the plots, enter them here.
 dictnames = {
-             'obs_cordex50': 'obs on CORDEX-44', 
-             'obs_cordex50_scale': 'obs on CORDEX-44 x 1.2'}
+             'obs_cordex50': 'observations@50km', 
+             'CORDEX-11_regrid': 'EUR-11@50km',
+             'PRIMAVERA': 'PRIMAVERA@50km',
+             'obs_cordex50_scale': 'obs on CORDEX-44_reduced x 1.2'}
 
 ### calculates the p_value of the difference for the folllowing datasets (used for the pie chart):
-sig_diff_btw_list = None# [['CORDEX-44', 'PRIMAVERA', ],
-                     #['obs_cordex50', 'CORDEX-44'],
+sig_diff_btw_list = [
+                    ['obs_cordex50', 'CORDEX-11_regrid'],
+                    #['obs_cordex50_scale', 'CORDEX-44'],
+                    ['obs_cordex50', 'PRIMAVERA'],
+                    ['CORDEX-11_regrid', 'PRIMAVERA', ]
+                    #['CORDEX-44', 'PRIMAVERA', ]
+                    ]
+# None# [['CORDEX-44_reduced', 'PRIMAVERA', ], #should start with 'obs' in it if using terciles!
+                     #['obs_cordex50', 'CORDEX-44_reduced'],
                      #['obs_cordex50', 'PRIMAVERA'], 
                      #]#'CORDEX_50']
 
 percent_sig_per_season = {}
+intervals_per_season = {}
+sig_val = 0.10
+plot_histograms = True
+#bootstrap_or_centiles = 'centiles'  # if 'centiles': plots centiles on the histograms (25/75) and performs a t_test
+                                    # if 'bootstrap': uses the bootstrap_config 
+if bootstrap_or_centiles == 'centiles':
+   nb_bootstrap_iter = 't_test'
+   percent_to_plot = [25, 50, 75]
+else:
+   percent_to_plot = [5, 95]
+end_of_file = '{}_{}.json'.format(int(sig_val*100), nb_bootstrap_iter)
+targetfile = '{}/{}_{}'.format(config['significance_dir'], '_'.join(r for r in maskedreglist.keys()), end_of_file)
 
-for season in seasons:
+if not plot_histograms:
+  if not os.path.exists(targetfile):
+    if os.path.exists('{}/{}_{}'.format(config['significance_dir'], maskedreglist.keys()[0], end_of_file)):
+        print 'joining all regional files together into {}'.format(targetfile)
+        join_all_files_in_one(targetfile, maskedreglist.keys(), config['significance_dir'], end_of_file)
+
+if not os.path.exists(targetfile):
+ for season in seasons:
     print 'season', season
     PreExt = __init__.PrecipExtremes(None, config, res_todo)
 
@@ -755,8 +412,7 @@ for season in seasons:
             ### change save_subplot to save_subplot_with_spread, 
             # percentiles are the interval used to plot the spread based on 1000 bootstrapped sample.
             # set plot=False for more than 6 regions
-            sig_val = 0.1 
-            percent_sig_per_season[season] = PreExt.save_subplot_with_spread('masked', 
+            percent_sig_per_season[season], intervals_per_season[season] = PreExt.save_subplot_with_spread('masked', 
                                 fractional, # plot type
                                 xlim[frequency], #x limits for the graph
                                 colordict, #defines the colour of the line
@@ -768,12 +424,13 @@ for season in seasons:
                                 dict_names=dictnames, 
                                 dict_ensemble=ensemble_dict, 
                                 bootstrap_config=bootstrap_config,
-                                percentiles=[5, 95], # [25, 50, 75] for centiles
+                                percentiles=percent_to_plot, # [25, 50, 75] for centiles
                                 sig_diff_btw_list=sig_diff_btw_list, # will be used as input for the pie chart
                                 sig_val=sig_val, # threshold of p_value to define "significantly different" 
-                                vals=[[1, 10], [10, 60], [60, 400], [1, 400]], # precipitation intervals on which to calculate significant difference
-                                plot=True, # set to False if you only want to calculate significance for the pie plot
-                                bootstrap_or_centiles='bootstrap') # can use either centiles over the ensemble or bootstrap spread to define the significance envelope.
+                                vals='terciles', #[[1, 10], [10, 60], [60, 400], [1, 400]], # precipitation intervals on which to calculate significant difference
+                                plot=plot_histograms, # set to False if you only want to calculate significance for the pie plot
+                                bootstrap_or_centiles=bootstrap_or_centiles) # can use either centiles over the ensemble or bootstrap spread to define the significance envelope.
+
 
     else:
         PreExt.load_data(['masked', ], season)
@@ -800,10 +457,23 @@ for season in seasons:
                                         subregion_files={reg: maskedreglist[reg]}, hist=hist,
                                         freq_factor=dict_freq[frequency], replace_names=True)
 
+ if percent_sig_per_season:
+      if not os.path.isdir(config['significance_dir']):
+          os.makedirs(config['significance_dir'])
+      with open(targetfile, 'w') as fh:
+          output = {'percent_sig': percent_sig_per_season, 'intervals': intervals_per_season}
+          json.dump(output, fh, indent=2, sort_keys=True)
+
+
 ####update11/10
 # this is where the pie plot is drawn:
-if 1==0:
- if percent_sig_per_season:
+else:
+ print('{} exists, drawing the pie charts'.format(targetfile))
+ with open(targetfile, 'r') as fh:
+   input_dict = json.load(fh)
+   percent_sig_per_season = input_dict['percent_sig']
+   if percent_sig_per_season:
+    
     print 'percent_sig_per_season', percent_sig_per_season
     ### 1) plot the map with masked subregions
     subpl = __init__.plot_map(subregion_files, bigregion)
@@ -813,11 +483,9 @@ if 1==0:
                             0.8, # size of the inset pie - not important 
                             percent_sig_per_season, # this was calculated by save_subplot_with_spread above
                             localdir + '/images/', 
-                            comp_col='CORDEX-44vsPRIMAVERA', # which datasets to compare (needs to be one defined in sig_diff_btw_list)
-                            comp_let=['obs_cordex50vsCORDEX-44', 'obs_cordex50vsPRIMAVERA'], # score of each dataset against obs to be compared, defined in sig_diff_btw_list
+                            comp_col='CORDEX-11_regridvsPRIMAVERA', # which datasets to compare (needs to be one defined in sig_diff_btw_list)
+                            comp_let = ['obs_cordex50vsCORDEX-11_regrid', 'obs_cordex50vsPRIMAVERA'], #['obs_cordex50vsCORDEX-11_regrid_reduced', 'obs_cordex50vsPRIMAVERA'], # score of each dataset against obs to be compared, defined in sig_diff_btw_list
                             plot_type=fractional, # contrib
                             distrib=distribution, # exponential100 
                             percent_interval=0.9, # on how much of the interval are the datasets significantly different
                             sig_val=int(sig_val*100)) # what is the value meaning "significantly different
-
-

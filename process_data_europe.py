@@ -17,8 +17,9 @@ import subprocess
 iris.FUTURE.cell_datetime_objects = True
 
 ### change datadir to where you want files to be output: they will be in datadir/jsondir
-config = {'datadir': "/home/users/sberthou/PrecipExtremes/", #/data/local/hadmm/upscale_precip/daily/",
-    'jsondir': "srex_pdf_json/",
+config = {'datadir': "/home/users/sberthou/PrecipExtremes/", 
+    'jsondir': "srex_pdf_json/", #where pdf json files are saved
+    'ncdir': "mean_nc/", #where time mean fields are saved
     'lsmasks': {} # not used here
 }
 
@@ -105,18 +106,19 @@ if __name__ == '__main__':
     elif distribution == 'exponential100':
         bin2 = np.exp(np.log(0.02) + 0.12*np.linspace(0, 99, 100))
         bins = np.pad(bin2, (1, 0), 'constant', constant_values=0) / 86400.
+        print 'bins', bins
     elif distribution == 'exponential40':
         bin2 = np.exp(np.log(0.2) + 0.4*np.linspace(0, 22, 40))
         bins = np.pad(bin2, (1, 0), 'constant', constant_values=0) / 86400.
-
-
-    if wet_or_dry_spells == 'wet':
+   
+    if wet_or_dry_spells is not None: 
+      if wet_or_dry_spells == 'wet':
         #        bins1 = np.array([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0])
         #        bins = np.pad(bins1, (0,1), 'constant', constant_values = 5000)/86400.
         dlim = 60 * dict_freq[frequency]  # days, duration max
         dbins = np.arange(1, dlim)
         duration_bins = np.pad(dbins, (0, 1), 'constant', constant_values=int(1000 * dict_freq[frequency]))
-    else:
+      else:
         # dry spells
         dlim = 360 * dict_freq[frequency]  # days, duration max
         ilim = 0.99  # mm/day, intensity max
@@ -125,7 +127,7 @@ if __name__ == '__main__':
         ibins = np.arange(0, ilim, 0.02)
         bins = np.pad(ibins, (0, 1), 'constant', constant_values=1)
         bins /= 86400.
-
+    print bins
 
     PreExt = __init__.PrecipExtremes(__init__.srex_reg, config, resolution, bins, duration_bins)
     for res in PreExt.resolutions:
@@ -137,10 +139,15 @@ if __name__ == '__main__':
             # for season in season_list:
             print season
             targdir = '{}{}'.format(config['datadir'], config['jsondir'])
-            if not os.path.isdir(targdir):
-                cmd = 'mkdir -p {}'.format(targdir)
-                shellcmd(cmd, 'failed to create {}'.format(targdir))
+            nctargdir = '{}{}'.format(config['datadir'], config['ncdir'])
+            for newdir in (targdir, nctargdir):
+                if not os.path.isdir(newdir):
+                    os.makedirs(newdir)
+                    # cmd = 'mkdir -p {}'.format(newdir)
+                    # shellcmd(cmd, 'failed to create {}'.format(newdir))
             targfile = "{}/{}_{}_{}_{}".format(targdir, res, r, season, config['histfile'])
+            targncfile = "{}/{}_{}_mean.nc".format(nctargdir, res, season)
+            ############ now compute the histograms and save them in the jsondir ####
             if not os.path.exists(targfile):
                 #### histogram calculation
                 PreExt.gendata(regrid_res, r, wet_or_dry_spells, thrs, hr2day=hourly2daily)
@@ -148,7 +155,14 @@ if __name__ == '__main__':
                 PreExt.dump_data(targfile)
             else:
                 print "file {} exists. skipping".format(targfile)
-
+            ############ now compute the time mean and save it in the ncdir #####
+            if not os.path.exists(targncfile):
+                if any(obs in res for obs in ('ca_', 'ibp_', 'uk_', 'alps_', 'france_', 'eobs')):
+                    PreExt.compute_and_save_mean(targncfile, year_by_year=True)
+                else:
+                    PreExt.compute_and_save_mean(targncfile)
+            else:
+                print "file {} exists. skipping mean calculation".format(targncfile)
 
 def shellcmd(cmd, msg_func):
     try:

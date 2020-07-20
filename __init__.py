@@ -131,13 +131,18 @@ def callback_overwrite(cube, field, filename):
     attributes_to_overwrite = ['date_created', 'log', 'converter', 'um_streamid',
                                'creation_date', 'history', 'iris_version', 'prod_date', 
                                'CDI', 'CDO', 'NCO', 'ArchiveMetadata.0', 'CoreMetadata.0', 
-                               'tracking_id', 'starttime', 'endtime', 'run_startdate', 'actual_range', 'experiment' ]
+                               'tracking_id', 'tracking_ID', 'starttime', 'endtime', 
+                               'run_startdate', 'actual_range', 'experiment',
+                               'convection_time_step_in_seconds' ]
     for att in attributes_to_overwrite:
         if cube.attributes.has_key(att):
             if att == 'history':
                 if 'cdo remapcon' in cube.attributes[att]:
                     if 'CORDEX' in cube.attributes[att]:
-                        cube.attributes['regridded_to'] = cube.attributes['history'].split(',')[1][:10]
+                        if 'EUROCORDEX' in cube.attributes[att]:
+                            cube.attributes['regridded_to'] = 'EUROCORDEX'
+                        else: 
+                            cube.attributes['regridded_to'] = cube.attributes['history'].split(',')[1][:10]
             cube.attributes[att] = 'overwritten'
     attributes_to_del = ['radar.flags', 'log', 'iris_version', '_NCProperties', 'NCO', 'atmosphere_time_step_in_seconds', 'model_simulation_start', 'model_simulation_end', 'model_is_restarted']
     for att in attributes_to_del:
@@ -235,10 +240,10 @@ class PrecipExtremes(object):
             #if 'parent_source_id' in self.original_data['ppn'].attributes:
             #    if 'EC-Earth3' in self.original_data['ppn'].attributes['parent_source_id']:
             #        redefine_spatial_coords(self.original_data['ppn'])
-            if 'model_id' in self.original_data['ppn'].attributes:
-                 if ('ALADIN' in self.original_data['ppn'].attributes['model_id']) |\
-                    ('ALARO' in self.original_data['ppn'].attributes['model_id']):
-                     handle_ALADIN_Lambert_grid(self.original_data['ppn'])
+            #if 'model_id' in self.original_data['ppn'].attributes:  ###### comment out if processing regridded files! ###
+            #    if ('ALADIN' in self.original_data['ppn'].attributes['model_id']) |\
+            #       ('ALARO' in self.original_data['ppn'].attributes['model_id']):
+            #         handle_ALADIN_Lambert_grid(self.original_data['ppn'])
             if self.original_data['ppn'].coords('time'):
                 self.start_year = self.original_data['ppn'].coord('time').cell(0).point.year
                 self.end_year = self.original_data['ppn'].coord('time').cell(-1).point.year
@@ -595,15 +600,15 @@ class PrecipExtremes(object):
                 # qplt.contourf(r_ppn[0, :, :])
                
                 if reg == 'masked': 
-                 if 'model_id' in r_ppn.attributes:
-                   if ('ALADIN' in r_ppn.attributes['model_id']) | ('ALARO' in r_ppn.attributes['model_id']):
-                       r_ppn.coord('projection_x_coordinate').convert_units('m')
-                       r_ppn.coord('projection_y_coordinate').convert_units('m')
-                   if ('NUIM-WRF341E' in r_ppn.attributes['model_id']) | ('IPSL-INERIS-WRF331F' in r_ppn.attributes['model_id']):
-                       r_ppn.remove_coord('grid_latitude')        
-                       r_ppn.remove_coord('grid_longitude')
-                       add_CORDEX_grid(r_ppn)
-                   if 'ICTP-RegCM4-3' in r_ppn.attributes['model_id']:
+                 if 'model_id' in r_ppn.attributes:   ### comment out if processing regridded files! ###
+                   #if ('ALADIN' in r_ppn.attributes['model_id']) | ('ALARO' in r_ppn.attributes['model_id']):
+                   #    r_ppn.coord('projection_x_coordinate').convert_units('m')
+                   #    r_ppn.coord('projection_y_coordinate').convert_units('m')
+                   #if ('NUIM-WRF341E' in r_ppn.attributes['model_id']) | ('IPSL-INERIS-WRF331F' in r_ppn.attributes['model_id']):
+                   #    r_ppn.remove_coord('grid_latitude')        
+                   #    r_ppn.remove_coord('grid_longitude')
+                   #    add_CORDEX_grid(r_ppn)
+                   if 'ICTP-RegCM4' in r_ppn.attributes['model_id']:
                        el_axis = r_ppn.coord('projection_x_coordinate').coord_system.ellipsoid.semi_major_axis
                        r_ppn.coord('projection_x_coordinate').coord_system.ellipsoid.semi_minor_axis = el_axis
                        r_ppn.coord('projection_y_coordinate').coord_system.ellipsoid.semi_minor_axis = el_axis
@@ -627,6 +632,7 @@ class PrecipExtremes(object):
                 print 'r_mask not masked array'
                 if r_mask.data.max() == 1.0:
                     print 'generating ocean mask from land-sea fraction'
+	     #
                     r_mask = mask_cube_where(r_mask, r_mask.data < 0.1)
                     if len(r_mask.data.mask.shape) == 0:
                         r_mask.data = np.ma.MaskedArray(r_mask.data, mask=False)
@@ -742,6 +748,22 @@ class PrecipExtremes(object):
                                                                               percent=percentile).data)  # , weights=area_weights).data)
         centiles['units'] = str(r_ppn.units)
         self.centiles = centiles
+
+    def compute_and_save_mean(self, targncfile, year_by_year=False):
+        if year_by_year:
+            first_year = self.original_data['ppn'].coord('time').cell(0).point.year
+            last_year = self.original_data['ppn'].coord('time').cell(-1).point.year
+            for year_select in range(first_year, last_year+1):
+                start_point = iris.time.PartialDateTime(year=year_select, month=1, day=1)
+                end_point = iris.time.PartialDateTime(year=year_select+1, month=1, day=1)
+                year_con = iris.Constraint(time=lambda t: start_point <= t < end_point)
+                year_cube = self.original_data['ppn'].extract(year_con)
+                mean = year_cube.collapsed('time', iana.MEAN)
+                year_targncfile = '{}_{}.nc'.format(targncfile.split('.')[0], str(year_select))
+                iris.save(mean, year_targncfile)
+        else:
+            mean = self.original_data['ppn'].collapsed('time', iana.MEAN)
+            iris.save(mean, targncfile)
 
     def annual_time_series(self, r_ppn, area_weights, lat_name='latitude', lon_name='longitude'):
         r_ppn_masked = mask_3Dcube_with_2Dmask(r_ppn, area_weights.mask)
@@ -1384,7 +1406,7 @@ class PrecipExtremes(object):
                     for ax_pos in ['bottom', 'top', 'right', 'left']:
                         subpl2.spines[ax_pos].set_color(col_order['_'.join(w for w in reg)])
                         subpl2.spines[ax_pos].set_linewidth(2)
-            if regcount == 1:
+            if regcount == 2:
                  subpl2.legend(prop={'size': 10}, loc='best')
             # legend_axes = plt.gcf().add_axes([0.56, 0.56, 0.2, 0.2])
             # subpl2.legend(prop={'size':9},bbox_to_anchor=(-0.6,0.45,0.2,0.55), loc=4, borderaxespad=0.1)
@@ -1452,12 +1474,14 @@ class PrecipExtremes(object):
                 if subpl:
                     subpl.set_extent(bigregion, ccrs.PlateCarree())  # Africa
         percent_sig = {}
+        intervals = {}
         for regcount, reg in enumerate(reg_todo):
             print 'reg', reg
             reg_short = reg
             if len(reg.split('_')) > 1:
                 reg_short = reg.split('_')[1]
             percent_sig[reg_short] = {}
+            intervals[reg_short] = {}
             if plot:
              numplot = start_plot + regcount
             # new subplot for each region
@@ -1498,6 +1522,7 @@ class PrecipExtremes(object):
                             print 'intermember spread to be calculated'
                             hist_to_plot_dict = {}
                             hist_to_plot_dict['0'] = get_mean_10_year_change(hist_to_plot[0])
+                           
                         dict_all_hist_to_plot[r] = {}
                         for year in hist_to_plot_dict.keys():
                             hist_to_plot = hist_to_plot_dict[year]
@@ -1526,14 +1551,18 @@ class PrecipExtremes(object):
                     list_in_ens = []
                     for ens_name in dict_ensemble:
                         print ens_name
+                        if bootstrap_or_centiles == 'bootstrap':
+                             year_start = bootstrap_config[ens_name]['master_ref_year']
+                        else:
+                             year_start = 1971 # does not matter
                         dict_all_hist_to_plot_new[ens_name] = {}
                         for num, r in enumerate(dict_ensemble[ens_name]):
                             list_in_ens.append(r)
                             ### give a fake year to ensemble members
-                            print bootstrap_config[ens_name]
-                            dict_all_hist_to_plot_new[ens_name][str(num+bootstrap_config[ens_name]['master_ref_year'])] = dict_all_hist_to_plot[r]['0']
+                            #print bootstrap_config[ens_name]
+                            dict_all_hist_to_plot_new[ens_name][str(num+year_start)] = dict_all_hist_to_plot[r]['0']
 
-                    print list_in_ens
+                    #print list_in_ens
                     for r in res_todo:
                         if r not in list_in_ens:
                             dict_all_hist_to_plot_new[r] = dict_all_hist_to_plot[r]
@@ -1545,42 +1574,49 @@ class PrecipExtremes(object):
                 ########### now plot, you may want to change some things in here ##############
 
                 for r in dict_all_hist_to_plot_fin.keys():
-                    if 'obs' in r:
-                        if 'scale' in r:
-                           bootstrap_config_to_do = bootstrap_config['obs_cordex50'][reg]
+                    bootstrap_config_to_do = {}
+                    if bootstrap_or_centiles == 'bootstrap':
+                        if 'obs' in r:
+                            if 'scale' in r:
+                               bootstrap_config_to_do = bootstrap_config['obs_cordex50'][reg]
+                            else:
+                               bootstrap_config_to_do = bootstrap_config[r][reg]
                         else:
-                           bootstrap_config_to_do = bootstrap_config[r][reg]
-                    else:
-                        bootstrap_config_to_do = bootstrap_config[r]
+                            bootstrap_config_to_do = bootstrap_config[r]
                     print 'percentiles', percentiles
                     low_high_bounds, mean_to_plot = get_histo_significance_interval(dict_all_hist_to_plot_fin[r].copy(), r,
                                                                                         bootstrap_config_to_do, bin_mean,
                                                                                         percentiles, bootstrap_or_centiles)
+                    if 'obs' in r:
+                        if not 'scale' in r:
+                            ref_histo_to_calculate_terciles = mean_to_plot.data
                     #print 'mean_to_plot.data', mean_to_plot.data
                     if plot:
                      print 'ens. length', r, ' ', len(dict_all_hist_to_plot_fin[r])
-                     ### plot individual curves
+                     ### uncomment to plot individual curves
                      #for his in dict_all_hist_to_plot_fin[r]:
                      #   subpl2.plot(bin_mean, dict_all_hist_to_plot_fin[r][his],
                      #               color=colorlwdict[r][0], linewidth=0.5, linestyle=colorlwdict[r][2],
                      #               )
-
+                     lab = r
+                     if r in dict_names:
+                        lab = dict_names[r]
                      if bootstrap_or_centiles == 'bootstrap':
-                       subpl2.plot(bin_mean, mean_to_plot.data,
+                         subpl2.plot(bin_mean, mean_to_plot.data,
                                     color=colorlwdict[r][0], linewidth=colorlwdict[r][1], linestyle=colorlwdict[r][2],
-                                    label='{}'.format(r))
-                       low_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == percentiles[0]))
-                       high_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == percentiles[1]))
+                                    label='{}'.format(lab))
+                         low_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == percentiles[0]))
+                         high_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == percentiles[1]))
                      else:
-                       print low_high_bounds.coord('percentile_over_years') 
-                       median = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 50))
-                       low_bound = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 25))#percentiles[0]))
-                       high_bound = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 75))#percentiles[1]))
-                       subpl2.plot(bin_mean, median.data,
+                         print low_high_bounds.coord('percentile_over_years') 
+                         median = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 50))
+                         low_bound = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 25))#percentiles[0]))
+                         high_bound = low_high_bounds.extract(iris.Constraint(percentile_over_years=lambda p: p == 75))#percentiles[1]))
+                         subpl2.plot(bin_mean, median.data,
                                     color=colorlwdict[r][0], linewidth=colorlwdict[r][1], linestyle=colorlwdict[r][2],
-                                    label='{}'.format(r))
+                                    label='{}'.format(lab))
                      if not 'scale' in r:
-                       subpl2.fill_between(bin_mean, low_bound.data, high_bound.data, color=colorlwdict[r][0], alpha=0.5)
+                         subpl2.fill_between(bin_mean, low_bound.data, high_bound.data, color=colorlwdict[r][0], alpha=0.5)
                     
                     #low_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == 0.5))
                     #high_bound = low_high_bounds.extract(iris.Constraint(percentile_over_bootstrap_sample_number=lambda p: p == 99.5))
@@ -1629,40 +1665,57 @@ class PrecipExtremes(object):
                     for aa, sig_diff_btw in enumerate(sig_diff_btw_list):
                         name_diff = '{}vs{}'.format(sig_diff_btw[0], sig_diff_btw[1])
                         percent_sig[reg_short][name_diff] = {}
+                        intervals[reg_short][name_diff] = {}
                         bootstrap_conf = {}
-                        for r in sig_diff_btw:
-                            if 'obs' in r:
-                                bootstrap_conf[r] = bootstrap_config[r][reg]
-                            else:
-                                bootstrap_conf[r] = bootstrap_config[r]
-                        p_val = test_hist_change_significance(dict_all_hist_to_plot_fin[sig_diff_btw[0]],
+                        if bootstrap_or_centiles == 'bootstrap':
+                            for r in sig_diff_btw:
+                                if 'obs' in r:
+                                    bootstrap_conf[r] = bootstrap_config[r][reg]
+                                else:
+                                    bootstrap_conf[r] = bootstrap_config[r]
+                            p_val = test_hist_change_significance(dict_all_hist_to_plot_fin[sig_diff_btw[0]],
                                                               dict_all_hist_to_plot_fin[sig_diff_btw[1]],
                                                               sig_diff_btw[0],
                                                               sig_diff_btw[1],
                                                               bootstrap_conf[sig_diff_btw[0]],
                                                               bootstrap_conf[sig_diff_btw[1]], bin_mean
                                                               )
-                        if plot:                                      
-                         if sig_diff_btw == 1: #['CORDEX-44', 'PRIMAVERA', ]: #only plot diff between first two datasets
-                           ax2 = subpl2.twinx()
-                           ax2.plot(bin_mean, p_val, '+',
-                                    color='k', alpha=0.4)
-                           ax2.set_ylim([0, 0.5])
-                           ax2.axhline(0.01, linewidth=1)
-                           fig.canvas.draw()
-                           ax2.yaxis.set_label_position("right")
-                           ax2.tick_params(axis="y",direction="in", pad=-24, color='grey')
-                           labels = [item.get_text() for item in ax2.get_yticklabels()]
-                           labels[0] = ''
-                           labels[-1] = '' ; labels[-2] = ''
-                           ax2.set_yticklabels(labels, color='grey')
-
-                        for val_min_max in vals:
+                        else:
+                             print name_diff
+                             p_val = test_hist_change_t_test(dict_all_hist_to_plot_fin[sig_diff_btw[0]],
+                                                              dict_all_hist_to_plot_fin[sig_diff_btw[1]],
+                                                              bin_mean)
+                        ##### uncomment to plot crosses #####
+                        #if plot:                                      
+                        # if aa == 2: #['CORDEX-44', 'PRIMAVERA', ]: #only plot diff between first two datasets
+                        #   ax2 = subpl2.twinx()
+                        #   ax2.plot(bin_mean, p_val, '+',
+                        #            color='grey', alpha=0.6)
+                        #   ax2.set_ylim([0, 1.0])
+                        #   ax2.axhline(0.1, linewidth=1)
+                        #   fig.canvas.draw()
+                        #   ax2.yaxis.set_label_position("right")
+                        #   ax2.tick_params(axis="y",direction="in", pad=-24, color='grey')
+                        #   labels = [item.get_text() for item in ax2.get_yticklabels()]
+                        #   labels[0] = ''
+                        #   labels[-1] = '' ; labels[-2] = ''
+                        #   ax2.set_yticklabels(labels, color='grey')
+                        
+                        if vals == 'terciles':
+                            axxt = None
+                            if plot:
+                               axxt = subpl2
+                            first_value, second_value = plot_one_third_two_thirds_vlines(axxt, ref_histo_to_calculate_terciles, bin_mean, values=(0.4, 0.9))
+                            value_bins = [[1.0, first_value], [first_value, second_value], [second_value, 400.0]]
+                        else: 
+                            value_bins = vals.copy()
+                        for interval, val_min_max in enumerate(value_bins, 1):
                             p_val_masked = np.ma.masked_where(bin_mean < val_min_max[0], p_val.copy())
                             p_val_masked = np.ma.masked_where(bin_mean > val_min_max[1], p_val_masked)
                             num_vals = p_val_masked.count()
                             p_val_masked_sig = np.ma.masked_where(p_val_masked > sig_val, p_val_masked)
-                            percent_sig[reg_short][name_diff]['{}to{}'.format(val_min_max[0], val_min_max[1])] = p_val_masked_sig.count() / np.float(num_vals)
+                            percent_sig[reg_short][name_diff]['{}'.format(interval)] = p_val_masked_sig.count() / np.float(num_vals)
+                            intervals[reg_short][name_diff]['{}'.format(interval)] = val_min_max
 
             if plot:
              if (np.mod(numplot - 1, numcol) == 0):
@@ -1725,14 +1778,14 @@ class PrecipExtremes(object):
                     for ax_pos in ['bottom', 'top', 'right', 'left']:
                         subpl2.spines[ax_pos].set_color(col_order['_'.join(w for w in reg)])
                         subpl2.spines[ax_pos].set_linewidth(2)
-             if regcount == 1:
+             if regcount == 0:
                 subpl2.legend(prop={'size': 10}, loc='best')
  
         if plot:
          plt.savefig(target + '.png', dpi=300)
          plt.savefig(target + '.pdf')
 
-        return percent_sig
+        return percent_sig, intervals
 
 
 ####end update11/10
@@ -2290,6 +2343,21 @@ def test_hist_change_significance(hist_ref, hist, res_ref, res, config_ref, conf
     p_val = np.ma.masked_where((cube_dict[res_ref].data <= 0.0005) & (cube_dict[res].data <= 0.0005), p_val)
     print 'p_val', p_val
     return p_val
+
+
+def test_hist_change_t_test(hist_ref, hist, bins):
+    histo_cube_ref = generate_cube_from_hist_with_year_dim(hist_ref.copy(), bins)
+    histo_cube = generate_cube_from_hist_with_year_dim(hist.copy(), bins)
+    print 'histo_cube', histo_cube
+    _, p_val = stats.ttest_ind(histo_cube_ref.data, histo_cube.data, axis=0, equal_var=False)
+
+    hist2plot_ref = get_mean_10_year_change(hist_ref)
+    cube_mean_ref = hist2cube(hist2plot_ref, bins)
+    hist2plot = get_mean_10_year_change(hist)
+    cube_mean = hist2cube(hist2plot, bins)
+    p_val = np.ma.masked_where((cube_mean_ref.data <= 0.0005) & (cube_mean.data <= 0.0005), p_val)
+    print 'p_val_ttest', p_val
+    return p_val 
 
 
 ####end update11/10
@@ -3119,17 +3187,18 @@ def plot_percent_change_between_centiles(ax, hist_to_plot_fin_ref, hist_to_plot_
                  fontsize=8)  # , color=color)
 
 
-def plot_one_third_two_thirds_vlines(ax, hist_to_plot_fin, bins, color='k',):
+def plot_one_third_two_thirds_vlines(ax, hist_to_plot_fin, bins, color='k', values=(0.333, 0.666)):
 
     hist_to_plot_fin_cum = np.cumsum(hist_to_plot_fin)/ hist_to_plot_fin.sum()
-    below_one_third = np.where(hist_to_plot_fin_cum < 0.333)
-    below_two_thirds = np.where(hist_to_plot_fin_cum > 0.666)
+    below_one_third = np.where(hist_to_plot_fin_cum < values[0])
+    below_two_thirds = np.where(hist_to_plot_fin_cum > values[1])
     one_third = below_one_third[0][-1]
     two_thirds = below_two_thirds[0][0]
     print one_third, bins[one_third]
     print two_thirds, bins[two_thirds]
-    ax.arrow(bins[one_third], 0, 0, hist_to_plot_fin[one_third], head_width=0, head_length=0, fc=color, ec=color)
-    ax.arrow(bins[two_thirds], 0, 0, hist_to_plot_fin[two_thirds], head_width=0, head_length=0, fc=color, ec=color)
+    if ax is not None:
+        ax.arrow(bins[one_third], 0, 0, hist_to_plot_fin[one_third], head_width=0, head_length=0, fc=color, ec=color)
+        ax.arrow(bins[two_thirds], 0, 0, hist_to_plot_fin[two_thirds], head_width=0, head_length=0, fc=color, ec=color)
 
     return bins[one_third], bins[two_thirds]
 
@@ -3516,11 +3585,14 @@ def estimate_local_pvalue_from_bootstrap(control_cube, control_cube_simulated, f
 
     return p_val.data
 
-def add_CORDEX_grid(cube):
-    if 'regridded_to' in cube.attributes:
-       nc = netCDF4.Dataset('/home/users/sberthou/PrecipExtremes/{}_grid.nc'.format(cube.attributes['regridded_to']), 'r')
+def add_CORDEX_grid(cube, grid=None):
+    if grid is None:
+       if 'regridded_to' in cube.attributes:
+          nc = netCDF4.Dataset('/home/users/sberthou/PrecipExtremes/{}_grid.nc'.format(cube.attributes['regridded_to']), 'r')
+       else:
+           nc = netCDF4.Dataset('/home/users/sberthou/PrecipExtremes/EUROCORDEX_grid.nc', 'r')
     else:
-       nc = netCDF4.Dataset('/home/users/sberthou/PrecipExtremes/EUROCORDEX_grid.nc', 'r')
+       nc = netCDF4.Dataset('/home/users/sberthou/PrecipExtremes/{}_grid.nc'.format(grid), 'r')
        # raise UserWarning('No info found for grid, make sure that the history attributes contains cdo remapcon and CORDEX')
     lat_tab = nc.variables['rlat'] 
     lon_tab = nc.variables['rlon']
@@ -3652,7 +3724,7 @@ def plot_pie_chart(ax, percent_sig_per_season, reg, comp, comp_let=[], percent_i
              'son': plt.get_cmap("Oranges", total_colors+1),
              'mam': plt.get_cmap("Greens", total_colors+1)}
 
-    intensities = ['60to400', '10to60', '1to10', ]
+    intensities = ['3', '2', '1', ]
     seasons = ['jja', 'mam', 'djf', 'son']
 
     for i, intensity in enumerate(intensities):
@@ -3678,8 +3750,8 @@ def plot_pie_chart(ax, percent_sig_per_season, reg, comp, comp_let=[], percent_i
                   elif prim_dist > cordex_dist + 0.1 :
                      num_let = 'C'
                else:
-                  if percent_sig_per_season[season][reg][comp_let[0]][intensity] < 0.7:
-                     if percent_sig_per_season[season][reg][comp_let[1]][intensity] < 0.7:
+                  if percent_sig_per_season[season][reg][comp_let[0]][intensity] < percent_interval:
+                     if percent_sig_per_season[season][reg][comp_let[1]][intensity] < percent_interval:
                         num_let = '='
             letters.append(num_let)           
         print letters 
